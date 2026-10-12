@@ -1,0 +1,18 @@
+boot.asm is the 8080 based operating system.
+It relies on io ports as hooks to tie it into
+the c routines in emulator_1.c
+
+diag.asm is a brute force 8080 opcode testor.
+
+ed.asm is an 8080 line editor with hooks to
+boot.asm
+
+ramtest.asm is a simple PSRAM test program. Has
+hooks to boot.asm
+
+To compile these use the asm80 assembler included 
+in this repository, or use your own.
+
+emulator_1.c relies on the file boot.hex (created
+by asm80) to run.
+
