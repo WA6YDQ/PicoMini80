@@ -1,0 +1,260 @@
+This is the README for asm80.
+
+This is an assembler for the 8080 processor. 
+asm80 is a two pass assembler. The first pass
+determines addresses. The second pass does the
+actual assembly.
+
+asm80 uses standard Intel 8080 opcodes defined 
+in the Intel MCS-80 book published in the 1970's. 
+asm80 compiles most CP/M era source code programs 
+with a few minor differences:
+
+1. This is NOT a macro assembler. 
+2. Quoted strings (ie in DB statements) must
+use "double qoutes", NOT 'single quotes'. You may
+need to change these by hand if your program
+uses single quotes.
+3. IF/ELSE/ENDIF and IFDEF/IFUNDEF statements
+are not implimented. You will need to make changes
+to your program if it uses conditional assembly.
+
+To make asm80:
+$> make
+
+Then copy it to your bin directory:
+$> sudo cp asm80 /usr/local/bin/
+
+
+There are 3 basic rules:
+1. Labels start in column 0. 
+2. Everything else (opcodes, org, DB/DW/DS)
+starts after column 0. 
+3. Comments (;comments) start wherever they want.
+
+
+Directives are:
+------------------------------------------
+EQU - equates. Can be UPPER or lower case.
+
+CR	EQU	13
+LF	EQU	10
+TLA	equ	0xff0
+TLAF	equ	TLA+1
+TLAD	EQU	TLA+100h
+
+------------------------------------------------------
+ORG - set program address. Can be upper or lower case.
+The org directive must start after column 0.
+
+START	ORG	0h
+	org 100
+
+--------------------------------------------------------
+DB - Define Byte. Store byte sized data in your program.
+DB can be UPPER case or lower case.
+Strings are surrounded by double quotes "string"
+Single characters are surrounded by single quotes '$' 
+
+MSG1	DB "This is a string",CR,LF,0
+PROMPT	db "> "
+debug	DB	CBh		;; custom opcode for processor
+stor1	db	0
+stor2	db	0
+stor3	DB	0
+
+-----------------------------------------------------------
+DW - Define Word. Set up space for a single word (2 bytes).
+DW can be UPPER case or lower case.
+
+ADR1	DW	0		; 2 bytes are reserved for ADR1
+ADR2	DW	1234	; 2 bytes are reserved for ADR2
+
+
+DS - Define Storage. Reserve space for a block of bytes.
+DS can be UPPER case or lower case.
+
+BUFFER	DS 80		; reserve 80 bytes for a text buffer
+
+
+--------------------
+; This is a comment.
+Comments start with a single semi-colon ';' and end
+at end of line.
+
+-------------------------------------------------------
+Labels start at column 0 and can be UPPER or lower case
+and may have MixEdCasE and numbers123. 
+Labels have a max length of 40 characters. Any duplication
+will be flagged as an error.
+A label can have a colon ':' as the final character to match
+the syntax older CP/M assemblers has. The colon will be stripped
+off and ignored. Special characters '_ - !' etc CANNOT be used
+in a label. ONLY Alpha Numeric characters [0-9] [Aa-Zz].
+There is a maximum of 1000 labels per program.
+
+--------------------------------------------
+Opcodes are pulled from Intel's MCS-80 book.
+Opcodes may be UPPER and lower case.
+Two opcodes: lxi and mvi may have trailing commas:
+
+	LXI SP,STACK
+	mvi a,01h
+	mvi b,	'%'
+	lxh h	BUFFER
+
+-----------------------------------------------------
+Numbers can be decimal, 4 digit hex with a trailing h
+or 4 digit starting with 0x.
+
+TCB	EQU	ffh	; 2 digit hex
+STORE1	EQU	100	; decimal
+STACK	EQU	0x1000	; 4 digit hex
+
+
+==========================================
+
+Any error encountered will display the error, the line number
+and the line of the program. Assembly will stop on any error.
+After fixing the error, restart the assemble process.
+
+After assembly, three files will be generated:
+
+filename.com	A binary file in normal order. Should be 
+		runnable on a CP/M system or any system
+		that runs 8080 object code.
+
+filename.prn	A printable listing used for debugging.
+
+filename.hex	An Intel HEX file suitable for uploading.
+
+===========================================
+
+
+------------------
+A typical session:
+------------------
+Use a text editor to create t4.asm:
+
+$> vi t4.asm
+; t4.asm - a simple 8080 assembler program
+
+CR	EQU	0dh
+LF	EQU	0ah
+CONOUT	EQU	255	; port 255 decimal for my system
+
+	org 0h		; set start address
+start	LXI SP,STACK	; load the stack pointer. The start label 
+			; is not needed, just good practice.
+	LXI H	MSG1	; point to a message to display
+	CALL	PRINT	; show message
+	HLT		; stop the program
+
+PRINT	; display a message on the terminal
+	MOV A,M		; no space between A and ,M
+	CPI	0	; NULL terminates the string
+	RZ		; return on zero match
+	OUT	CONOUT
+	INX	H
+	JMP	PRINT	; continue until NULL
+
+; Program Storage
+MSG1	DB	"Hello, World!",CR,LF,0
+SPACE	DS	32	; give the stack 32 bytes to play with
+STACK
+
+---------------------------
+Compile the program t4.asm:
+---------------------------
+
+$> ASM80 t4.asm
+PASS 1
+PASS 2
+Assembly complete. 
+Hex file Written
+
+---------------------
+The output of t4.prn:
+---------------------
+
+$> cat t4.prn
+*** Starting PASS 1
+*** Starting PASS 2
+
+0044 CR
+
+0044 LF
+
+0044 CONOUT
+org 0x0000
+
+0000 start
+0000 31 0044 lxi sp STACK
+0003 21 0014 lxi h MSG1
+0006 CD 000A call PRINT
+0009 76      hlt
+
+000A PRINT
+000A 7E      mov a,m
+000B FE 00   cpi 0
+000D C8      rz
+000E D3 FF   out CONOUT
+0010 23      inx h
+0011 C3 000A jmp PRINT
+
+0014 MSG1
+0014 MSG1    DB      "Hello, World!",CR,LF,0
+
+0024 SPACE
+0024 SPACE DS 20
+
+0044 STACK
+
+Labels:
+              CR   0x000D   13(d)
+              LF   0x000A   10(d)
+          CONOUT   0x00FF   255(d)
+           start   0x0000   0(d)
+           PRINT   0x000A   10(d)
+            MSG1   0x0014   20(d)
+           SPACE   0x0024   36(d)
+           STACK   0x0044   68(d)
+
+Last address 67(d)    0x0043
+
+ASM80 t4.asm
+PASS 1
+PASS 2
+Assembly complete. 
+Hex file Written
+
+---------------------
+The output of t4.com:
+---------------------
+
+$> dump t4.com
+000000 31 44 00 21 14 00 cd 0a 00 76 7e fe 00 c8 d3 ff  >1D.!.....v~.....<
+000010 23 c3 0a 00 48 65 6c 6c 6f 2c 20 57 6f 72 6c 64  >#...Hello, World<
+000020 21 0d 0a 00 00 00 00 00 00 00 00 00 00 00 00 00  >!...............<
+000030 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  >................<
+000040 00 00 00 00                                      >....<
+000044
+
+---------------------
+The output of t4.hex:
+---------------------
+
+$> cat t4.hex
+:10000000314400211400CD0A00767EFE00C8D3FFE3
+:1000100023C30A0048656C6C6F2C20576F726C64A8
+:10002000210D0A0000000000000000000000000098
+:1000300000000000000000000000000000000000C0
+:0400400000000000BC
+:00000001FF
+
+$>
+
+============================================
+
+
+
