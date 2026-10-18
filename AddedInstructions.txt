@@ -1,0 +1,156 @@
+emulator_2.c uses unused 8080 opcodes for additional instructions.
+
+0x08	Floating Point co-processor instructions (2 byte opcode)
+0x10	break - calls abort routine (same as pressing ABORTSW) (1 byte opcode)
+0x18	Load registers R0 thru R7 with word (4 byte opcode)
+0x20	General Operations with Index Regs R0 thru R7 (2 byte opcode)
+0x28	Branch (on condition), word (4 byte opcode)
+0x30
+0x38
+
+
+---------------------- FLOATING POINT ---------------------
+0x08	Primary Opcode Invoke Floating Point Instructions
+HL points to operandResult
+BC points to Operand1
+DE points to Operand2
+Second Opcode
+0x00	ADD operandResult = Operand1 + Operand2
+0x01	SUB operandResult = Operand1 - Operand2
+0x02	MUL operandResult = Operand1 * Operand2
+0x03	DIV	operandResult = Operand1 / Operand2
+0x04	POW operandResult = Operand1 ^ Operand2
+0x05	SQR operandResult = sqrt(Operand1)
+0x06	I2F operandResult = (double)Operand1 (converts 32 bit integer to a double float)
+0x07
+
+0x08	SIN operandResult = sin(Operand1) radians
+0x09	COS operandResult = cos(Operand1) radians
+0x0a	TAN operandResult = tan(Operand1) radians
+0x0b	ASIN operandResult = arcsin(Operand1) radians
+0x0c	ACOS operandResult = arccos(Operand1) radians
+0x0d	ATAN operandResult = arctan(Operand1) radians
+0x0e
+0x0f
+
+0x10	LOG2 operandResult = log_2(Operand1) 
+0x11	LOG10 operandResult = log_10(Operand1)
+0x12	LOGE operandResult = log_e(Operand1)
+0x13	10X operandResult = 10^(Operand1) (anti log base 10)
+0x14
+0x15
+0x16
+0x17
+
+
+
+----------------- BREAK ---------------------------------
+Primary Opcode (1 byte opcode)
+0x10	BREAK (requires RESETSW or ABORTSW push, or console interaction to resume)
+
+
+---------------- LOAD INDEX --------------------
+0x18	Primary opcode Load Registers R0 thru R7
+Second opcode
+0x00	lxi	R0, word
+0x01	lxi R1, word
+0x02	lxi R2, word
+0x03	lxi R3, word
+0x04	lxi R4, word
+0x05	lxi R5, word
+0x06	lxi R6, word
+0x07	lxi R7, word
+
+
+
+---------------- INDEX OPERATIONS -------------------
+0x20 	Primary opcode Operations with A and Rn and Index copy
+Second opcode
+0x00	mov (R0),(R1)
+0x01	mov (R0),(R2)
+0x02	mov (R0),(R3)
+0x03	mov (R0),(R4)
+0x04	mov (R0),(R5)
+0x05	mov (R0),(R6)
+0x06	mov (R0),(R7)
+0x07
+
+0x08	mov (R1),(R0)
+0x09	mov (R2),(R0)
+0x0a	mov (R3),(R0)
+0x0b	mov (R4),(R0)
+0x0c	mov (R5),(R0)
+0x0d	mov (R6),(R0)
+0x0e	mov (R7),(R0)
+0x0f
+
+0x10	inx R0		FLAGS Z
+0x11	inx R1			"
+0x12	inx R2			"
+0x13	inx R3			"
+0x14	inx R4			"
+0x15	inx R5			"
+0x16	inx R6			"
+0x17	inx R7			"
+
+0x18	dcx R0		FLAGS Z
+0x19	dcx R1			"
+0x1a	dcx	R2			"
+0x1b	dcx	R3			"
+0x1c	dcx R4			"
+0x1d	dcx R5			"
+0x1e	dcx R6			"
+0x1f	dcx R7			"
+
+0x20	mov a,(R0)
+0x21	mov a,(R1)
+0x22	mov a,(R2)
+0x23	mov a,(R3)
+0x24	mov a,(R4)
+0x25	mov a,(R5)
+0x26	mov a,(R6)
+0x27	mov a,(R7)
+
+0x28	mov (R0),a
+0x29	mov (R1),a
+0x2a	mov (R2),a
+0x2b	mov (R3),a
+0x2c	mov (R4),a
+0x2d	mov (R5),a
+0x2e	mov (R6),a
+0x2f	mov (R7),a
+
+0x30	adc a,(R0)
+0x31	adc a,(R1)
+0x32	adc a,(R2)
+0x33	adc a,(R3)
+0x34	adc a,(R4)
+0x35	adc a,(R5)
+0x36	adc a,(R6)
+0x37	adc a,(R7)
+
+0x38	sbb a,(R0)
+0x39	sbb a,(R1)
+0x3a	sbb a,(R2)
+0x3b	sbb a,(R3)
+0x3c	sbb a,(R4)
+0x3d	sbb a,(R5)
+0x3e	sbb a,(R6)
+0x3f	sbb a,(R7)
+
+
+
+------------------ BRANCH ---------------------
+Primary Opcode Branch word
+0x28	BRA 
+Second opcode (condition)
+0x00	Z=1
+0x01	Z=0
+0x02	CY=1
+0x03	CY=0
+0x04	S=1
+0x05	S=0
+0x06	Always
+0x07
+
+

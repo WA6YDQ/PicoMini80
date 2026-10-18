@@ -32,14 +32,14 @@ include(/opt/pico-extras/external/pico_extras_import.cmake) # Added for dormant
 
 
 
-project(emulator_1 C CXX ASM)
+project(emulator_2 C CXX ASM)
 
 
 
 pico_sdk_init()
 
 # these are all the source files
-add_executable(${PROJECT_NAME} emulator_1.c hw_config.c)
+add_executable(${PROJECT_NAME} emulator_2.c ports.c routines.c hw_config.c)
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(${PROJECT_NAME} 0)
@@ -52,8 +52,8 @@ add_subdirectory(no-OS-FatFS-SD-SDIO-SPI-RPi-Pico/src)
 string(APPEND CMAKE_EXE_LINKER_FLAGS " -Wl,--print-memory-usage")
 
 # added
-pico_set_program_name(emulator_1 "emulator_v1")
-pico_set_program_version(emulator_1 "0.1")
+pico_set_program_name(emulator_2 "emulator_v1")
+pico_set_program_version(emulator_2 "0.1")
 
 
 target_link_libraries(${PROJECT_NAME} 
