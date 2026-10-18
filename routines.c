@@ -35,6 +35,8 @@ uint8_t read_byte_from_bus(int8_t);
 
 
 // call this when ABORTSW pressed or hardware break (0x10) opcode called
+#pragma GCC push_options
+#pragma GCC optimize ("O0")
 void abort_routine(void) {
 
 	printf("\n\nABORT Routine Invoked\n");
@@ -59,20 +61,26 @@ void abort_routine(void) {
 	while (1) {
 		if (gpio_get(RESETSW)==0) break;
 		if (gpio_get(ABORTSW)==0) {
+			printf("Abort Switch Pressed\n");
 			while (gpio_get(ABORTSW)==0) sleep_ms(40);
 			sleep_ms(40);
 			abort_cmdLine();
 			printf("\nPress RESET to continue, ABORT for command interface\n");
 			continue;
 		}
+		sleep_ms(20);		// keep cpu cycles down
 	}
-		
-	while (gpio_get(RESETSW)==0) sleep_ms(40);
+	printf("Reset Switch Pressed\n");
+	
+	if (gpio_get(RESETSW)==0) {	
+		while (gpio_get(RESETSW)==0) 
+			sleep_ms(40);
+	}
 	sleep_ms(40);
 	gpio_put(HALTLED,0);
 	return;
 } /* --------------------------------------------------------------- */
-
+#pragma GCC pop_options
 
 
 
@@ -144,6 +152,8 @@ void abort_cmdLine(void) {
 			printf("\n");
 			continue;
 		}
+		
+		printf("Type 'help' for a command summary\n");
 		
 	}
 } // ----------------------------------------------------------

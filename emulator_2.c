@@ -14,12 +14,24 @@
 	This uses a superset of the 8080 processor instruction set with
 	additional instructions available.
 	
+	--------------------------------------
+	To build:
+	edit CMakeLists.txt
+	mkdir build
+	cd build
+	cmake -DPICO_PLATFORM=rp2350 ../
+	make
+
+	Then copy the .uf2 file to the pico device
+	----------------------------------------
+	
+	
 	(C) 2026 Kurt Theis
 */
 
 
 
-
+/* ***** NOTE!! Do not change any lines below - This is still alpha. Memory limits defined elsewhere! *** */
 /* Determine if this is a RAM only system, or RAM/ROM */
 /* RAM only: RAM=0 thru 0xFFFF, no ROM */
 /* RAMROM: RAM=0 thru 0xEFFF, ROM=0xF000 thru 0xFFFF */
@@ -199,7 +211,7 @@ int main(void) {
 			gpio_put(HALTLED,1);
 			for (int n=0; n<MAXUSER; n++) 
 				regs[n].PC = 0;
-			printf("RESET Switch Pressed\n");
+			printf("Main - RESET Switch Pressed\n");
 			printf("PC set to 00\n");
 			while (gpio_get(RESETSW)==0) sleep_ms(40);
 			sleep_ms(40);
