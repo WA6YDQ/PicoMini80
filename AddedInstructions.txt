@@ -1,56 +1,49 @@
-emulator_2.c uses unused 8080 opcodes for additional instructions.
+emulator_2.c uses the following unused 8080 opcodes for additional instructions:
 
 0x08	Floating Point co-processor instructions (2 byte opcode)
 0x10	break - calls abort routine (same as pressing ABORTSW) (1 byte opcode)
-0x18	Load registers R0 thru R7 with word (4 byte opcode)
-0x20	General Operations with Index Regs R0 thru R7 (2 byte opcode)
-0x28	Branch (on condition), word (4 byte opcode)
-0x30
-0x38
+0x18	lxi R0..R7 - Load registers R0 thru R7 with word (4 byte opcode)
+0x20	Index copy with R0-R7 (2 byte opcode)
 
+0x28	Increment/Decrement R0 thru R7 (2 byte opcode)
+0x30	Branch (on condition), offset (3 byte opcode)
+0x38	DAD Rn - 16 bit add from HL and R0 thru R7, result in HL. Flags Z, CY, S  (2 byte opcode)
+0xCB	(unassigned)
+
+0xD9	DSUB rp - 16 bit subtract: HL - rp, save result in HL. Flags Z, CY, S (2 byte opcode)
+0xDD	(unassigned)
+0xED	(unassigned)
+0xFD	(unassigned)
 
 ---------------------- FLOATING POINT ---------------------
-0x08	Primary Opcode Invoke Floating Point Instructions
-HL points to operandResult
+0x08	Primary Opcode Invoke Floating Point Instructions (2 byte opcode)
+
+HL points to Result or String
 BC points to Operand1
 DE points to Operand2
+
 Second Opcode
-0x00	ADD operandResult = Operand1 + Operand2
-0x01	SUB operandResult = Operand1 - Operand2
-0x02	MUL operandResult = Operand1 * Operand2
-0x03	DIV	operandResult = Operand1 / Operand2
-0x04	POW operandResult = Operand1 ^ Operand2
-0x05	SQR operandResult = sqrt(Operand1)
-0x06	I2F operandResult = (double)Operand1 (converts 32 bit integer to a double float)
-0x07
-
-0x08	SIN operandResult = sin(Operand1) radians
-0x09	COS operandResult = cos(Operand1) radians
-0x0a	TAN operandResult = tan(Operand1) radians
-0x0b	ASIN operandResult = arcsin(Operand1) radians
-0x0c	ACOS operandResult = arccos(Operand1) radians
-0x0d	ATAN operandResult = arctan(Operand1) radians
-0x0e
-0x0f
-
-0x10	LOG2 operandResult = log_2(Operand1) 
-0x11	LOG10 operandResult = log_10(Operand1)
-0x12	LOGE operandResult = log_e(Operand1)
-0x13	10X operandResult = 10^(Operand1) (anti log base 10)
-0x14
-0x15
-0x16
-0x17
+0x00	(unassigned)
+0x01	ADD Result = Operand1 + Operand2 BC=Operand1, DE=Operand2, HL=Result
+0x02	SUB Result = Operand1 - Operand2 BC=Operand1, DE=Operand2, HL=Result
+0x03	MUL Result = Operand1 * Operand2 BC=Operand1, DE=Operand2, HL=Result
+0x04	DIV	Result = Operand1 / Operand2 BC=Operand1, DE=Operand2, HL=Result
+0x05	SQR Result = sqrt(Operand1)  BC=Operand1, HL=Result
 
 
+0xfe	Float to String: BC points to floating point number (32 bits), HL points to null terminated string
+0xff	String to Float: BC points to Null terminated ascii string, HL points to floating point result 
 
 ----------------- BREAK ---------------------------------
 Primary Opcode (1 byte opcode)
 0x10	BREAK (requires RESETSW or ABORTSW push, or console interaction to resume)
+		The BREAK instruction stops operation, preserving all registers, flags and memory values.
+		BREAK activates the abort function (same as pressing the ABORTSW) showing all the registers.
+		Can be useful for debugging. Outputs to console ONLY.
 
 
 ---------------- LOAD INDEX --------------------
-0x18	Primary opcode Load Registers R0 thru R7
+0x18	Primary opcode Load Registers R0 thru R7 (4 byte opcode)
 Second opcode
 0x00	lxi	R0, word
 0x01	lxi R1, word
@@ -64,93 +57,126 @@ Second opcode
 
 
 ---------------- INDEX OPERATIONS -------------------
-0x20 	Primary opcode Operations with A and Rn and Index copy
+0x20 	Primary opcode Operations with A and Rn and Index copy (2 byte opcode)
 Second opcode
-0x00	mov (R0),(R1)
-0x01	mov (R0),(R2)
-0x02	mov (R0),(R3)
-0x03	mov (R0),(R4)
-0x04	mov (R0),(R5)
-0x05	mov (R0),(R6)
-0x06	mov (R0),(R7)
-0x07
+0x00	mov (R0),(R1)	Index Copy: Byte addressed by R1 copied to byte addressed by R0
+0x01	mov (R0),(R2)		" R2 "
+0x02	mov (R0),(R3)		" R3 "
+0x03	mov (R0),(R4)		" R4 "
+0x04	mov (R0),(R5)		" R5 "
+0x05	mov (R0),(R6)		" R6 "
+0x06	mov (R0),(R7)		" R7 "
+0x07	(unassigned)
 
-0x08	mov (R1),(R0)
-0x09	mov (R2),(R0)
-0x0a	mov (R3),(R0)
-0x0b	mov (R4),(R0)
-0x0c	mov (R5),(R0)
-0x0d	mov (R6),(R0)
-0x0e	mov (R7),(R0)
-0x0f
+0x08	mov (R1),(R0)	Index Copy: Byte addressed by R0 copied to byte addressed by R1
+0x09	mov (R2),(R0)		" " R2
+0x0a	mov (R3),(R0)		" " R3
+0x0b	mov (R4),(R0)		" " R4
+0x0c	mov (R5),(R0)		" " R5
+0x0d	mov (R6),(R0)		" " R6
+0x0e	mov (R7),(R0)		" " R7
+0x0f	(unassigned)	
 
-0x10	inx R0		FLAGS Z
-0x11	inx R1			"
-0x12	inx R2			"
-0x13	inx R3			"
-0x14	inx R4			"
-0x15	inx R5			"
-0x16	inx R6			"
-0x17	inx R7			"
+0x10	mov A,(R0)		copy the byte addressed by R0 into A
+0x11	mov A,(R1)		"" R1 ""
+0x12	mov A,(R2)		"" R2 ""
+0x13	mov A,(R3)		"" R3 ""
+0x14	mov A,(R4)		"" R4 ""
+0x15	mov A,(R5)		"" R5 ""
+0x16	mov A,(R6)		"" R6 ""
+0x17	mov A,(R7)		"" R7 ""
 
-0x18	dcx R0		FLAGS Z
-0x19	dcx R1			"
-0x1a	dcx	R2			"
-0x1b	dcx	R3			"
-0x1c	dcx R4			"
-0x1d	dcx R5			"
-0x1e	dcx R6			"
-0x1f	dcx R7			"
+0x18	mov (R0),A		copy A into the byte addressed by R0
+0x19	mov (R1),A		"" "" R1
+0x1A	mov (R2),A		"" "" R2
+0x1B	mov (R3),A		"" "" R3
+0x1C	mov (R4),A		"" "" R4
+0x1D	mov (R5),A		"" "" R5
+0x1E	mov (R6),A		"" "" R6
+0x1F	mov (R7),A		"" "" R7
 
-0x20	mov a,(R0)
-0x21	mov a,(R1)
-0x22	mov a,(R2)
-0x23	mov a,(R3)
-0x24	mov a,(R4)
-0x25	mov a,(R5)
-0x26	mov a,(R6)
-0x27	mov a,(R7)
 
-0x28	mov (R0),a
-0x29	mov (R1),a
-0x2a	mov (R2),a
-0x2b	mov (R3),a
-0x2c	mov (R4),a
-0x2d	mov (R5),a
-0x2e	mov (R6),a
-0x2f	mov (R7),a
+------------------- INCREMENT/DECREMENT R0 thru R7 ----------
+0x28	Primary opcode (2 byte opcode)
+Second Opcode
+0x00	Increment R0
+0x01	Increment R1
+0x02	Increment R2
+0x03	Increment R3
+0x04	Increment R4
+0x05	Increment R5
+0x06	Increment R6
+0x07	Increment R7
 
-0x30	adc a,(R0)
-0x31	adc a,(R1)
-0x32	adc a,(R2)
-0x33	adc a,(R3)
-0x34	adc a,(R4)
-0x35	adc a,(R5)
-0x36	adc a,(R6)
-0x37	adc a,(R7)
-
-0x38	sbb a,(R0)
-0x39	sbb a,(R1)
-0x3a	sbb a,(R2)
-0x3b	sbb a,(R3)
-0x3c	sbb a,(R4)
-0x3d	sbb a,(R5)
-0x3e	sbb a,(R6)
-0x3f	sbb a,(R7)
+0x08	Decrement R0
+0x09	Decrement R1
+0x0A	Decrement R2
+0x0B	Decrement R3
+0x0C	Decrement R4
+0x0D	Decrement R5
+0x0E	Decrement R6
+0x0F	Decrement R7
 
 
 
 ------------------ BRANCH ---------------------
-Primary Opcode Branch word
-0x28	BRA 
+Primary Opcode Branch word (3 byte opcode: 0x30 [condition] [branch address])
+Positive Offset (00H to 7FH) 0 to +127 past current instruction (offset=1, skip byte after BRA opcode)
+Negative offset (80H to FFH) -128 to -3 bytes (FD jumps back to BRA, FC to the byte before BRA - BRA is 3 bytes)
+0x30	BRA 
 Second opcode (condition)
-0x00	Z=1
-0x01	Z=0
-0x02	CY=1
-0x03	CY=0
-0x04	S=1
-0x05	S=0
-0x06	Always
-0x07
+0x00	Always (unconditional branch)	
+0x01	Z=1    	BRA Z offset
+0x02	Z=0		BRA NZ offset
+0x03	CY=1	BRA C offset
+0x04	CY=0	BRA NC offset
+0x05	S=1		BRA minus offset
+0x06	S=0		BRA positive offset
+0x07	P=1		BRA parity even offset
+0x08	P=0		BRA parity odd offset
+0x09	CY=1 Z=0 		A<B		(LT - less than)
+0x0A	CY=0 Z=0 		A>B		(GT - greater than)
+0x0B	CY=1 or Z=1  	A<=B	(LE - less than or equal)
+0x0C	C=0			A>=B	(GE - greater than or equal)
+0x0D	C=0 Z=1			A=B		(EQ - equal)
 
+Based on 8080 Flags: 
+• To jump if (A < B): Use JC (Jump on Carry).
+• To jump if (A >= B): Use JNC (Jump on No Carry).
+• To jump if (A = B): Use JZ (Jump on Zero).
+• To jump if (A != B): Use JNZ (Jump on No Zero).
+
+
+
+------------- DAD Rn ----------------
+Primary Opcode 0x38  (2 byte opcode) ADD HL to Rn, save result in HL. CY set if result > 65535
+Set Z on zero, S on minus
+Second Opcode
+0x00	R0		Add HL to R0 (allow saving value of R0 to HL)
+0x01	R1		""  ""    R1 (by 1st clearing HL then adding)
+0x02	R2		""  ""    R2 (so that LHLD and SHLD work on )
+0x03	R3		""  ""    R3 (R0 thru R7)
+0x04	R4		""  ""    R4
+0x05	R5		""  ""    R5
+0x06	R6		""  ""    R6
+0x07	R7		""  ""    R7
+
+
+----------- DSUB rp -------------
+16 bit subtraction with register pair HL. Set CY on underflow, Z on zero, S on minus
+Primary Opcode 0xD9
+This is a 2 byte opcode.
+Second Opcode
+0x00	R0		Subtract R0 from HL, result in HL
+0x01	R1		""       R1
+0x02	R2		""       R2
+0x03	R3		""       R3
+0x04	R4		""       R4
+0x05	R5		""		 R5
+0x06	R6		""		 R6
+0x07	R7		""		 R7
+
+0x08	SP		""       SP
+0x09	BC		""		 BC
+0x0A	DE		""		 DE
 

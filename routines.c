@@ -21,19 +21,36 @@ FIL fil;
 
 /* global externals */
 extern I80REGS regs[MAXUSER];
-extern uint8_t memory[MAXRAM][MAXUSER];
+extern uint8_t read_memory(uint8_t, uint16_t);
+extern uint8_t write_memory(uint8_t, uint16_t, uint8_t);
+extern void output(uint8_t, uint8_t, uint8_t);
+
 extern int user;
+extern uint8_t ram;
+extern uint8_t rom;
+
+// for rtc functions
+extern time_t start_epoch;
+extern int64_t start_us;
+
+// instruction timing
+extern uint64_t avg_inst_time;
 
 /* local routine definitions */
 char* pico_fgets(char*, int, FILE*);
 void abort_routine(void);
 int load_hexfile_to_ram(int, char *);
-int load_file_to_ram(int, uint16_t, char*);
-void abort_cmdLine(void);
+int load_file_to_ramrom(int, uint16_t, char*);
+int abort_cmdLine(void);
 void write_byte_to_bus(uint8_t, uint8_t);
 uint8_t read_byte_from_bus(int8_t);
+void init_current_time(void);
+int show_dir(int);
+void lls(int, const char *);
+int send_to_output(int , char *);
 
 
+/* *********** abort_routine ************* */
 // call this when ABORTSW pressed or hardware break (0x10) opcode called
 #pragma GCC push_options
 #pragma GCC optimize ("O0")
@@ -41,6 +58,9 @@ void abort_routine(void) {
 
 	printf("\n\nABORT Routine Invoked\n");
 	gpio_put(HALTLED,1);
+	
+	// show instruction timing
+	printf("Average Opcode Instruction Time %lld nS\n\n",avg_inst_time);
 	
 	// show machine registers
 	printf("User\tPC\tA \tBC\tDE\tHL\tSP\tZ\tCY\tS\tP\tAC\n");
@@ -64,13 +84,13 @@ void abort_routine(void) {
 			printf("Abort Switch Pressed\n");
 			while (gpio_get(ABORTSW)==0) sleep_ms(40);
 			sleep_ms(40);
-			abort_cmdLine();
+			if (abort_cmdLine() == 1) break;;
 			printf("\nPress RESET to continue, ABORT for command interface\n");
 			continue;
 		}
 		sleep_ms(20);		// keep cpu cycles down
 	}
-	printf("Reset Switch Pressed\n");
+	printf("Returning to Running State\n");
 	
 	if (gpio_get(RESETSW)==0) {	
 		while (gpio_get(RESETSW)==0) 
@@ -86,13 +106,13 @@ void abort_routine(void) {
 
 #pragma GCC push_options
 #pragma GCC optimize ("O0")
-void abort_cmdLine(void) {
+int abort_cmdLine(void) {
 	char buffer[80];
 	char ch;
 	int input;
 	
 	
-	printf("\n\nAbort Commands\n");
+	printf("\n\nAbort Commands\nType 'help' for command list\n");
 	while (1) {
 	
 		printf("\nabort> ");
@@ -103,6 +123,41 @@ void abort_cmdLine(void) {
 		char *p = strchr(buffer,'\n');
 		if (p) *p = '\0';
 		if (buffer[0] == '\0') continue; 	// ignore empty lines
+		
+		if (!strncmp(buffer,"reboot",6)) {
+			printf("\nRebooting!\n");
+			sleep_ms(750);
+			watchdog_reboot(0, 0, 0);
+			// Arguments: (pc, sp, delay_ms)
+    		// Setting pc and sp to 0 tells the chip to perform a clean hardware reboot
+		}
+		
+		if (!strncmp(buffer,"dir",3)) {
+			//this replaces show_dir();
+			// show files on SD card
+			
+		    FRESULT res;
+		    FATFS *fs;
+		    fs = malloc(sizeof (FATFS));
+		    
+		    char cmd[5];
+		    const char path[20]={'\0'};
+		    sscanf(buffer,"%s %s",cmd, path);
+
+			res = f_mount(fs, "", 0);
+			if (FR_OK != res) {
+				printf("Error Mounting Card\n");
+				f_unmount("0:");
+				free(fs);
+				continue;
+			}
+      		printf("Card Mounted OK\n");
+			lls(0, path);		/* use ls routine instead of FatFS readdir() which is broken */
+			f_unmount("0:");
+			free(fs);
+			printf("\n");
+			continue;
+		}
 		
 		if (!strncmp(buffer,"dump",4)) {		// show a block of user_ram[user][start address]
 			// parse the line
@@ -126,12 +181,12 @@ void abort_cmdLine(void) {
       			printf("%04X ",addr + (16 * row));
       			for (col=0; col < 16; col++) {
       				locadr = addr + (row*16) + col;
-      				if (locadr > MAXRAM) {
+      				if (locadr > ROMEND) {
       					printf("\nviewing address (%04X) exceeds bounds\n",locadr);
       					break;
       				}
       				//printf("[DEBUG] End of loop. Current row: %d, Next row will be: %d\n", row, row + 1);
-      				uint8_t byte_val = memory[user][locadr];
+      				uint8_t byte_val = read_memory(user, locadr);	//memory[user][locadr];
       				printf("%02X ",byte_val);
       			}
       			printf("\n");
@@ -142,13 +197,15 @@ void abort_cmdLine(void) {
 		}
 		
 		if (!strncmp(buffer,"exit",4)) {	// exit abort routine
-			return;
+			return 1;
 		}
 		
 		if (!strncmp(buffer, "help", 4)) {
 			printf("exit        exit the abort routine\n");
+			printf("dir         display directory of files on SD card\n");
 			printf("dump [user] [address]\n");
 			printf("help        show this message\n");
+			printf("reboot      reboot the machine and internal hardware\n");
 			printf("\n");
 			continue;
 		}
@@ -218,7 +275,7 @@ char* pico_fgets(char* str, int num, FILE* stream) {
 #pragma GCC push_options
 #pragma GCC optimize ("O0")
 // load a given .hex file into ram for specified user
-int load_hexfile_to_ram(int usernumber, char *filename) {
+int load_hexfile_to_ramrom(int usernumber, char *filename) {
 
 	static FIL sdcard_file;
 	uint br;
@@ -311,7 +368,7 @@ int load_hexfile_to_ram(int usernumber, char *filename) {
       		if (tdat[1] > 0x39) tdat[1] -= 7;
       		tdat[1] -= 0x30;
       		// save byte
-      		memory[user][addr++] = (16 * tdat[0]) + tdat[1];
+      		write_memory(usernumber, addr++, (16 * tdat[0] + tdat[1]));
       		bytecount--;
     	}
     	
@@ -349,10 +406,13 @@ int load_file_to_ram(int usernumber, uint16_t start_address, char *filename) {
 	uint br;
 	FATFS fs;
 	
+	char locbuf[80];
+	
 	/* Mount Card */
 	FRESULT fr = f_mount(&fs, "", 1);
 	if (FR_OK != fr) {
-        printf("Error mounting card\n");
+        sprintf(locbuf, "lf2r(): Error mounting card\n");
+        send_to_output(usernumber, locbuf);
         return 1;
 	}
 	
@@ -371,7 +431,8 @@ int load_file_to_ram(int usernumber, uint16_t start_address, char *filename) {
     	fr = f_close(&sdcard_file);
     	// unmount the card
     	f_unmount("0:");
-    	printf("Error - File Too Large\n");
+    	sprintf(locbuf, "lf2r(): Error - File Too Large\n");
+    	send_to_output(usernumber, locbuf);
     	return 1;
     }
     	
@@ -379,8 +440,8 @@ int load_file_to_ram(int usernumber, uint16_t start_address, char *filename) {
     
     // save end address to FBC
     // FCB+38 = last used address high, FCB+39 = last used address low
-	memory[usernumber][FCB_LAST_HI] = ((filesize + TPA) & 0xff00) >> 8;
-	memory[usernumber][FCB_LAST_LO] = (filesize + TPA) & 0x00ff;
+	write_memory(usernumber, FCB_LAST_HI, (((filesize + TPA) & 0xff00) >> 8));
+	write_memory(usernumber, FCB_LAST_LO, ((filesize + TPA) & 0x00ff));
 
     uint8_t file_buffer[filesize];
     memset(file_buffer,0,filesize);
@@ -392,7 +453,7 @@ int load_file_to_ram(int usernumber, uint16_t start_address, char *filename) {
     // save buffer to RAM
     count = 0;
     for (addr = TPA; addr <= TPA + filesize; addr++) 
-    	memory[usernumber][addr] = file_buffer[count++];
+    	write_memory(usernumber, addr, file_buffer[count++]);
     	
     // close the file
     fr = f_close(&sdcard_file);
@@ -488,3 +549,171 @@ uint8_t read_byte_from_bus(int8_t address) {
 }
 
 
+
+
+/* initialize and set time using pi pico 2 xtal clock reference */
+void init_current_time(void) {
+    struct tm user_time = {0};
+    int input;
+
+    printf("\n--- Enter Current Local Date/Time ---\n");
+    printf("Enter Year (e.g. 2026): ");   
+    scanf("%d", &input); user_time.tm_year = input - 1900;
+    printf("%d\n",input);
+    
+    printf("Enter Month (1-12): ");      
+    scanf("%d", &input); user_time.tm_mon = input - 1;
+    printf("%d\n",input);
+    
+    printf("Enter Day (1-31): ");        
+    scanf("%d", &user_time.tm_mday);
+    printf("%d\n",user_time.tm_mday);
+    
+    printf("Enter Hour (0-23): ");       
+    scanf("%d", &user_time.tm_hour);
+    printf("%d\n",user_time.tm_hour);
+    
+    printf("Enter Minute (0-59): ");     
+    scanf("%d", &user_time.tm_min);
+    printf("%d\n",user_time.tm_min);
+
+    
+    user_time.tm_sec = 0;
+    user_time.tm_isdst = -1;
+
+    // Save values globally
+    start_epoch = mktime(&user_time);
+    start_us = to_us_since_boot(get_absolute_time());
+    
+    printf("\nTime Set\n");
+}
+
+
+
+/* read and display on console current clock time/date */
+void get_current_time(void) {
+    // 1. Get the real elapsed time since the Pico booted up
+    absolute_time_t now = get_absolute_time();
+    int64_t elapsed_secs = (to_us_since_boot(now) - start_us) / 1000000;
+
+    // 2. Add the elapsed seconds to our original base time
+    time_t current_epoch = start_epoch + elapsed_secs;
+    
+    // 3. Break it back out into a readable structure
+    struct tm *current_time = localtime(&current_epoch);
+
+    // 4. Print it
+    printf("Current Date/Time: \n%04d-%02d-%02d %02d:%02d:%02d\n", 
+        current_time->tm_year + 1900, 
+        current_time->tm_mon + 1, 
+        current_time->tm_mday, 
+        current_time->tm_hour, 
+        current_time->tm_min, 
+        current_time->tm_sec);
+}
+
+
+
+
+/* display the directory of the sd card drive */
+/* NOTE: There are much better directory listing programs for FatFs formats */
+int show_dir(int usernumber) {
+
+	char locbuf[80];
+	
+	/* Mount Card */
+	FRESULT fr = f_mount(&fs, "", 1);
+	if (FR_OK != fr) {
+        sprintf(locbuf, "show_dir(): Error mounting card\n");
+        send_to_output(usernumber, locbuf);
+        return 1;
+	}
+	
+	ls("/");	// the root level files
+	
+	// unmount the card
+    f_unmount("0:");
+    
+    return 0;
+}
+
+
+
+/*** This is a better readdir then from FatFS ***/
+/* this is pulled from ~/Pico/pico-tool/no-OS-FatFS-SD-SPI-RPi-Pico/example/FatFS_SPI_example.cpp */
+void lls(int usernumber, const char *dir) {
+const char *FRESULT_str(FRESULT);
+	char locbuf[80];		// create string for output instruction
+    char cwdbuf[FF_LFN_BUF] = {0};
+    FRESULT fr; /* Return value */
+    char const *p_dir;
+    if (dir[0]) {
+        p_dir = dir;
+    } else {
+        fr = f_getcwd(cwdbuf, sizeof cwdbuf);
+        if (FR_OK != fr) {
+            sprintf(locbuf, "f_getcwd error: %s (%d)\n", FRESULT_str(fr), fr);
+            send_to_output(usernumber, locbuf);
+            return;
+        }
+        p_dir = cwdbuf;
+    }
+    //printf("Directory Listing: %s\n", p_dir);
+    DIR dj;      /* Directory object */
+    FILINFO fno; /* File information */
+    memset(&dj, 0, sizeof dj);
+    memset(&fno, 0, sizeof fno);
+    fr = f_findfirst(&dj, &fno, p_dir, "*");
+    if (FR_OK != fr) {
+        sprintf(locbuf, "f_findfirst error: %s (%d)\n", FRESULT_str(fr), fr);
+        send_to_output(usernumber, locbuf);
+        return;
+    }
+    int col = 1;
+    while (fr == FR_OK && fno.fname[0]) { /* Repeat while an item is found */
+        /* Create a string that includes the file name, the file size and the
+         attributes string. */
+        const char *pcWritableFile = "rw",	// "writable file",
+                   *pcReadOnlyFile = "ro",	// "read only file",
+                   *pcDirectory = "<DIR>";
+        const char *pcAttrib;
+        /* Point pcAttrib to a string that describes the file. */
+        if (fno.fattrib & AM_DIR) {
+            pcAttrib = pcDirectory;
+        } else if (fno.fattrib & AM_RDO) {
+            pcAttrib = pcReadOnlyFile;
+        } else {
+            pcAttrib = pcWritableFile;
+        }
+        /* Create a string that includes the file name, the file size and the attributes string. */
+        if (read_memory(usernumber, DIRMODE)==0) {		// wide mode
+        	sprintf(locbuf,"%-12s    ",fno.fname);
+        	send_to_output(usernumber,locbuf);
+        	col++;
+        	if (col == 6) {
+        		col = 1;
+        		sprintf(locbuf,"\n");
+        		send_to_output(usernumber, locbuf);
+        	}
+		}
+        
+        if (read_memory(usernumber, DIRMODE)==1) {		// long mode
+        	sprintf(locbuf,"%06llu %3s %-12s\n", fno.fsize, pcAttrib, fno.fname);
+        	send_to_output(usernumber,locbuf);
+		}
+		
+
+        fr = f_findnext(&dj, &fno); /* Search for next item */
+    }
+    f_closedir(&dj);
+}
+
+
+/* common output via output port 0 */
+int send_to_output(int user, char *outstring) {
+
+	volatile int n;
+	for (n = 0; n < strlen(outstring); n++)
+		output(user, outstring[n], 0);		// user, single char in A, port# (always 0)
+	return 0;
+}
