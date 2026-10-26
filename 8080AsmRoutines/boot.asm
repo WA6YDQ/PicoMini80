@@ -4,34 +4,47 @@
 ;; runs on a pi-pico2 but should work on any system 
 ;; with the same hardware configuration.
 ;; Compiled with ASM80 assembler (Kurts assembler)
-
+;;
+;; version 0.5  Modified for emulator_3 memory changes
+;;				removed stat command (did nothing useful)
+;;				changed date command to not show buffer
 ;; version 0.4	Added access controls
 ;; version 0.3	Added all basic file and disk commands
-;; version 0.2 basic functionality
+;; version 0.2  basic functionality
 
 
-conout	equ	0
-conin	equ	0
+conout	equ	0			;; console output port#
+conin	equ	0			;; console input port#
+DIRPORT	EQU		255		;; input port# to show the directory on the storage device
+LOADFILE EQU	254		;; input port# loads a named file from storage device 
 CR		equ	13
 LF		equ	10
 NULL	equ	0
 
-;; fff0 last address used by OS
-LOGSTAT	EQU	FFFFh		;; 00: not logged in, FF: logged in
-WARMBOOT EQU FFFEh		;; address to hold boot status: 0=cold boot, 1=warm boot
-LOGNAME EQU FEA3h		;; fea3-FEC3 (32 bytes) store name:pass for login command
-TIMEBUF equ fe52h		;; fe52-fea2 80 bytes
-buffer	equ	fe01h		;; fe01-fe51 80 bytes
-STACK	equ	fe00h		;; below buffers fe00-fdb0 80 bytes for stack (40 levels)
+;; ROMSTART is 1st address used by OS, equals RAMEND+1	
+RAMEND 		EQU 0xEFFF
+ROMSTART	EQU	RAMEND+1
+STACK	EQU	RAMEND		;; 80 bytes for stack (40 levels), grows down
+
+OSRAM	EQU	EE00h		;; 512 bytes below RAMEND used for buffers, stack etc
+
+DIRMODE EQU  OSRAM+196	;; 0: dir wide   1: dir long
+WARMBOOT EQU OSRAM+195	;; address to hold boot status: 0=cold boot, 1=warm boot
+LOGNAME EQU OSRAM+162	;; (32 bytes) store name:pass for login command
+TIMEBUF EQU OSRAM+82	;; 80 bytes
+buffer	EQU OSRAM+1		;; 80 bytes
+LOGSTAT	EQU	OSRAM		;; 00: not logged in, FF: logged in
+
 						;; OS resides just above TPAEND 
-OSSTART	equ	F000h		;; start of OS routines
-TPA		equ	100h		;; transiant program area
-TPAEND	equ EFFFh		;; end of TPA - need to subtract TPA from TPAEND for max program size
+OSSTART	equ	ROMSTART	;; start of OS routines
+TPA		equ	100h		;; transiant program area Start address
+TPAEND	equ EDFFh		;; end of TPA - need to subtract TPA from TPAEND for max program size (TPASIZE)
+TPASIZE EQU ECFFh		;; TPA size
 
 BOOT	EQU	0x0000
 IOBYTE	EQU	0x0003
 
-STARTSEED	EQU	5ah			; initial seed for LFSR routine
+STARTSEED	EQU	5ah		;; initial seed for LFSR routine
 
 
 ; File Control Block 1 (5Ch thru 7Ch) FCB1 5C-7C (92d - 124d)
@@ -57,7 +70,7 @@ FCBSTARTHI		EQU FCB+36		; 2 byte start address
 FCBSTARTLO		EQU	FCB+37
 FCBENDHI		EQU	FCB+38		; 2 byte end address
 FCBENDLO		EQU	FCB+39
-FCBSTATUS		EQU	FCB+40		; returned status byte
+FCBSTATUS		EQU	FCB+40		; returned status byte from disk routines (0=OK, >0=failure)
 
 ;; FCB2 for routines needing a second filename (rename, copy, etc)
 ;; these will be overwritten by the BDOS
@@ -70,16 +83,16 @@ FILETYPE2		EQU	FCB+49		; 3 char file type in ascii, upper case
 	org BOOT
 	jmp OSSTART		;; warm boot (and cold boot on power up) jump point
 	
-	org	IOBYTE		;; i/o assignment byte, typically 0 (for CP/M)
+	org	IOBYTE		;; i/o assignment byte, typically 0 (future use for CP/M)
 	db 0
 	
-	org	0x0004		;; current drive, usually 0 (for CP/M)
+	org	0x0004		;; current drive, usually 0 (future use for CP/M)
 	db 0
 	
-	org 0x0005		;; BDOS system call entry (for CP/M)
+	org 0x0005		;; BDOS system call entry (future use for CP/M)
 	jmp	BDOS
 	
-	;; CP/M Memory Structure
+	;; CP/M Memory Structure (future use)
 	; Top of Memory FFFF
 	; BIOS	FA00
 	; BDOS  EC00
@@ -102,7 +115,7 @@ FILETYPE2		EQU	FCB+49		; 3 char file type in ascii, upper case
 	jz		WBOOT		; jump to warm boot
 	jmp		COLDBOOT	; else jump to cold boot to set things up
 
-bootmessage	db	CR,LF,"OS1 version 0.4",CR,LF,NULL	
+bootmessage	db	CR,LF,"OS1 version 0.5",CR,LF,NULL	
 helpmessage db  "Type 'help' if needed.",CR,LF,NULL
 PROMPT      DB  "OS1> ",NULL
 
@@ -168,7 +181,7 @@ CCP		; Console Command Processor (a la CP/M)
 	; and execute it. In CP/M terms this is the CCP (Console Command Processor)
 	
 	; OS1 has a very basic access control system. Nothing can be done until logging
-	; in. After your work is done, you log out of the system.
+	; in. After your work is done, you log out of the system by typing 'logout'.
 	; To login in type 'login'. You will them be prompted for a user name.
 	; After typing your user name and hitting <enter> you will be prompted for a
 	; password. Type in your password and press <enter>. If your credentidals match
@@ -235,12 +248,19 @@ CCP1		;; logged in entry loop
 	jz		type_file
 	
 	
-	; 'dir' - show disk directory
-	lxi d	dir_cmd
+	; 'dir' - show disk directory (wide mode, 5 cols)
+	lxi d	dirw_cmd
 	lxi h	buffer
 	call	strcmp
 	cpi 	0
-	jz		show_dir
+	jz		show_dirw
+	
+	; 'dirl' - shopw long version of dir listing
+	lxi d	dirl_cmd
+	lxi h	buffer
+	call	strcmp
+	cpi 	0
+	jz		show_dirl
 	
 	
 	; 'new' - clear ram from TPA thru TPAEND
@@ -301,13 +321,7 @@ CCP1		;; logged in entry loop
 	cpi		0
 	jz		copy_file
 	
-	
-	; 'stat' display file stats
-	lxi d	stat_cmd
-	lxi h	buffer
-	call	strcmp
-	cpi		0
-	jz		stat_file
+
 	
 	
 	;; assume the command is a program name
@@ -375,41 +389,42 @@ ver_cmd		DB "ver",NULL
 run_cmd		DB "run",NULL
 ; jumps to TPA start 
 
-dir_cmd		DB "dir",NULL
+dirw_cmd	DB "dir",NULL
+; runs show_dir
+
+dirl_cmd	DB "dirl",NULL
 ; runs show_dir
 
 new_cmd		DB "new",NULL
-; runs 'new' routine
+; runs 'new' routine Clear TPA
 
 cls_cmd		DB "clear",NULL
-; runs clr_scr
+; runs clr_scr Clear the Screen
 
 help_cmd	DB "help",NULL
 ; runs show_help
 
 type_cmd	DB "type",NULL
-; runs type_file
+; runs type_file Display disk text file
 
 del_cmd		DB "del",NULL
-; runs delete_file
+; runs delete_file Delete Disk File
 
 era_cmd		DB "era",NULL
-; runs delete_file
+; runs delete_file Delete Disk File
 
 ren_cmd		DB "ren",NULL
-; runs rename_file
+; runs rename_file Rename Disk File
 
 create_cmd	DB "create",NULL
-; runs create_file
+; runs create_file Create an empty Disk File
 
 date_cmd	DB "date",NULL
 ; display date/time
 
 copy_cmd	DB	"copy",NULL
-; copy file1.ext file2.ext
+; copy file1.ext file2.ext on disk
 
-stat_cmd	DB	"stat",NULL
-; stat [filename] - show file info
 
 
 ;; --------------------------------------------------
@@ -526,8 +541,10 @@ LOGFAIL		DB CR,LF,"Bad Login/Password",CR,LF,NULL
 show_daytime	; read rtc via out port, display date/time
 
 	mvi a	0
-	out		251		;; buffer filled via DMA
+	out		251		;; buffer filled via DMA and time displayed
+	jmp 	CCP
 	
+	; below works, but is ignored
 	; now show memory location
 	lxi		h TIMEBUF
 s_day0
@@ -546,31 +563,7 @@ s_day1	; finished
 	jmp		CCP
 
 
-; -----------------------------------------
-stat_file 	; show file stats
-	
-	call	get_filename2
-	lxi		h	STATMSG
-	call	puts
-	out		249			; file stat
-	
-	lda		FCBSTATUS
-	cpi		0
-	jz		stat_file_OK
-	
-	; failed
-	lxi		h	STATFAIL
-	call	puts
-	jmp		CCP
-	
-stat_file_OK
-	lxi		h	STATOK
-	call	puts
-	jmp		CCP
-	
-STATFAIL	DB	"File Error",CR,LF,NULL
-STATOK		DB	"Command Successful",CR,LF,NULL
-STATMSG		DB  "Note: this function does not return all file data correctly",CR,LF,LF,NULL
+
 
 
 ; ----------------------------------
@@ -706,7 +699,16 @@ show_version
 
 
 ; ---------------------------------------------
-show_dir
+show_dirw		;; wide mode
+	mvi a	0
+	jmp		show_dir1
+
+show_dirl		;; long mode
+	mvi a	1
+	jmp		show_dir1
+
+show_dir1
+	sta		DIRMODE
 	in 		0xff
 	mvi a	CR
 	call	putc
@@ -716,6 +718,8 @@ show_dir
 SHOWDIR	DB	CR,LF,"Directory Listing",CR,LF,NULL
 
 
+
+
 ; ------------------------------------
 new	; Clear the TPA memory (also called by load etc)
 	call	clear_tpa
@@ -723,7 +727,7 @@ new	; Clear the TPA memory (also called by load etc)
 	
 clear_tpa	; clear user ram space
 	lxi h	TPA
-	lxi d	eeffh	;TPAEND-TPA
+	lxi d	TPASIZE	;TPAEND-TPA
 	mvi a	0
 c_tpa1
 	mov	m,a
@@ -758,14 +762,14 @@ HELPLIST	DB CR,LF
 			DB "ver     - show version",CR,LF
 			DB "run     - restart program loaded in memory",CR,LF
 			DB "clear   - clear the screen",CR,LF
-			DB "dir     - show the disk directory",CR,LF
-			DB "type    - display contents of a file",CR,LF
-			DB "del     - delete a disk file",CR,LF
-			DB "era     - delete a disk file (CP/M compatibility)",CR,LF
+			DB "dir     - show the disk directory (wide display)",CR,LF
+			DB "dirl    - show the disk directory (detailed)",CR,LF
+			DB "type    - display contents of a text file",CR,LF
+			DB "del     - delete a disk file (del file)",CR,LF
+			DB "era     - delete a disk file (era file) (CP/M compatibility)",CR,LF
 			DB "create  - create an empty disk file",CR,LF
-			DB "ren     - rename a disk file",CR,LF
-			DB "copy    - copy a file",CR,LF
-			DB "stat    - display file attributes",CR,LF
+			DB "ren     - rename a disk file (ren old new)",CR,LF
+			DB "copy    - copy a file (copy old new)",CR,LF
 			DB "date    - display time and date",CR,LF
 			DB NULL
 			
@@ -773,7 +777,7 @@ HELPLIST	DB CR,LF
 ; ------------------------------------------------------		
 type_file
 	; load a text file to TPA then display a page at a time
-	; (simular to unix more command or ms-dos type command)
+	; (akin to unix more command or ms-dos type command)
 	
 	; clear any old filename data
 	call	clear_fcb	
@@ -812,8 +816,8 @@ tf2	inx		h		; skip 1st space
 	
 tf30
 	; set or reset row/col counters
-	mvi		b	10		; number of rows to show
-	mvi		c	79		; number of columns to show, resets at CR
+	mvi		b	ROWDEF		; number of rows to show
+	mvi		c	COLDEF		; number of columns to show, resets at CR
 	
 tf3
 	inx		h		; next address
@@ -840,7 +844,7 @@ tf3b
 
 	
 tf3a	; col at 0 
-	mvi		c,79	; reset col counter
+	mvi		c,COLDEF	; reset col counter
 	dcr		b		; row counter
 	jnz		tf3
 	
@@ -869,7 +873,8 @@ tf5	; user wants to quit - clear the message and return to loop
 	jmp		CCP	
  
 	 
-
+ROWDEF	EQU	20
+COLDEF	EQU	79
 next_page_msg	DB CR,LF,"Press <cr> for More, Q to Quit",NULL	
 	
 	

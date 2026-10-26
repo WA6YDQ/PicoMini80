@@ -7,12 +7,11 @@ diag.asm is a brute force 8080 opcode testor.
 ed.asm is an 8080 line editor with hooks to
 boot.asm
 
-ramtest.asm is a simple PSRAM test program. Has
-hooks to boot.asm
+mon.asm is a simple ML monitor
 
 To compile these use the asm80 assembler included 
 in this repository, or use your own.
 
-emulator_1.c relies on the file boot.hex (created
-by asm80) to run.
+emulator_x.c relies on the file boot.hex (created
+by asm80) to run where x is the current version #.
 
