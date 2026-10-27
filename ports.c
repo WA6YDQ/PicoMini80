@@ -1,4 +1,5 @@
 /* ports.c - define I/O hardware and OS hooks */
+/* used for emulator_x  (C) 2026 K Theis   */
 
 /*
 	

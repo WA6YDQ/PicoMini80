@@ -1,4 +1,5 @@
-/* float.c - floating point math routines for emulator */
+/* float.c - floating point math routines for emulator_x */
+/* (C) 2026 K Theis  */
 
 #include "emulator.h"
 

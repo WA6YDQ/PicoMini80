@@ -1,4 +1,4 @@
-/* emulator_3.c (C) 2026 Kurt Theis <theis.kurt@gmail.com>
+/* emulator_3.c 
 
 	This turns a Pi Pico 2 into an 8 bit multi-user computer system.
 	Up to 8 simultanous users can share the system via serial IO.
@@ -85,7 +85,7 @@
 	(only affects the i8080 DAA instruction). 
 	Max of 7 users due to memory.
 	
-	(C) 2026 Kurt Theis
+	(C) 2026 Kurt Theis <theis.kurt@gmail.com>
 */
 
 

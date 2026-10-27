@@ -1,4 +1,5 @@
-/* emulator.h */
+/* emulator.h - used for emulator_x */
+/* (C) 2026 K Theis */
 
 
 /* ********************************************************************* */
@@ -39,12 +40,47 @@ extern char PASSLIST[PASSCOUNT][32];	// PASSWORD list, set up in emulator_3.c
 #define ABORTSW 28
 #define DEFAULT_LED 25	// on-board green led
 
+
+/* 
+SD Card Pin numbers are defined in hw_config.c
+but shown here for clarity
+
+SD Card MOSI GPIO 19 (hardware pin 25)
+SD Card  MISO GPIO 16 (hardware pin 21)
+SD Card CS GPIO 17 (hardware pin 22)
+SD Card SCK GPIO 18 (hardware pin 24)
+*/
+
+
 // port and control pins
 #define ALE 7			// GPIO numbers, not pin numbers
 #define INT 21
 #define INTA 20
 #define IORD 2
 #define IOWR 3
+#define STROBETIME 10	// time in microseconds (uS)
+
+/* 
+   The I/O Bus uses IORD, IOWR and ALE (all active low)
+   in addition to the following 8 bus pins:
+   bus0 gpio 8 (pin 11)
+   bus1 gpio 9 (pin 12)
+   bus2 gpio 10 (pin 14)
+   bus3 gpio 11 (pin 15)
+   bus4 gpio 12 (pin 16)
+   bus5 gpio 13 (pin 17)
+   bus6 gpio 14 (pin 19)
+   bus7 gpio 15 (pin 20)
+   The 8 bit address is placed on the bus, then ALE is strobed low, then high
+   For input, the bus is set for input, then IORD is strobed low. The bus is read
+   then IORD goes high.
+   For output, the bus is set for output. The bus contains the 8 bit value. 
+   Then IOWR is strobed low, then high
+   uint8_t read_byte_from_bus(int8_t address) - Reads the bus
+   void write_byte_to_bus(uint8_t address, uint8_t data_byte) - Write to the bus
+   Both of these routines are in routines.c
+   
+*/
 
 #define BAUD_RATE 115200
 #define UART0_TX_PIN 0		// gpio pin numbers
@@ -53,8 +89,12 @@ extern char PASSLIST[PASSCOUNT][32];	// PASSWORD list, set up in emulator_3.c
 #define UART1_RX_PIN 5
 
 
-/* Define memory locations for IO routines */
-/* these are in each users RAM, either zero page or near ramtop */
+/* 
+	Define memory locations for IO routines. 
+    these are in each users RAM, either zero page or near ramtop.
+    These addresses are used in the OS file boot.asm 
+    and the routines called by boot.asm
+*/
 #define DEFAULT_STACK RAMEND  	// 80 bytes (40 levels deep)
 #define OSRAM 0xEE00			// OS registers, buffers, etc start here, go UP (511 bytes)
 

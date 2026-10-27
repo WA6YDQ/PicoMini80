@@ -1,4 +1,5 @@
 /* routines.c - holds various utility routines */
+/* for emulator_x  (C) 2026 K Theis  */
 
 
 #include "emulator.h"
@@ -492,9 +493,9 @@ void write_byte_to_bus(uint8_t address, uint8_t data_byte) {
     gpio_put_masked(mask, value);
     // strobe ALE 
     gpio_put(ALE,0);
-    sleep_us(10);
+    sleep_us(STROBETIME);
     gpio_put(ALE,1);
-    sleep_us(10);
+    sleep_us(STROBETIME);
     
     
 
@@ -504,7 +505,7 @@ void write_byte_to_bus(uint8_t address, uint8_t data_byte) {
     gpio_put_masked(mask, value);
     // strobe IOWR
     gpio_put(IOWR,0);
-    sleep_us(10);
+    sleep_us(STROBETIME);
     gpio_put(IOWR,1);
     
 }
@@ -529,16 +530,16 @@ uint8_t read_byte_from_bus(int8_t address) {
     gpio_put_masked(mask, value);
     // strobe ALE 
     gpio_put(ALE,0);
-    sleep_us(10);
+    sleep_us(STROBETIME);
     gpio_put(ALE,1);
-    sleep_us(10);
+    sleep_us(STROBETIME);
 
 	// prepare to read the bus
 	// Set the direction to input
 	gpio_set_dir_in_masked(GP8_15_MASK);
 	// strobe IORD
 	gpio_put(IORD,0);
-	sleep_us(10);
+	sleep_us(STROBETIME);
 	// Read all 32 GPIO pins at the exact same snapshot in time
     uint32_t all_pins = gpio_get_all();
 	gpio_put(IORD,1);
