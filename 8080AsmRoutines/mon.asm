@@ -37,12 +37,15 @@ start
 ; ------------------------------------------------
 monloop
 	call	getc
+	; command in A - save for later
+	sta		COMMAND
 
 	
 ; <cr> - increment address, show values
-test1
+test0
+	lda		COMMAND
 	cpi		CR
-	jnz		test2		; increment address. show addr and byte
+	jnz		test1
 	lhld	WORKINGADR
 	inx		h
 	shld	WORKINGADR
@@ -50,10 +53,21 @@ test1
 	call	show_current
 	jmp		monloop
 	
+test1  ; 'n' Same as CR. Increment address, show next
+	lda		COMMAND
+	cpi		'n'
+	jnz		test2
+	lhld	WORKINGADR
+	inx		h
+	shld	WORKINGADR
+	call	crlf
+	call	show_current
+	jmp		monloop
 	
-; 'b' - decrement address, show values
-test2
-	cpi		'b'			; decrement address, show addr and byte
+
+test2	; 'b' - decrement address, show values
+	lda		COMMAND
+	cpi		'b'	
 	jnz		test3
 	lhld	WORKINGADR
 	dcx		h
@@ -63,17 +77,45 @@ test2
 	jmp		monloop
 	
 	
-; 'q' - finished here, resturn to OS
-test3
+
+test3	; 'q' - finished here, return to OS
+	lda		COMMAND
 	cpi		'q'
 	jnz		test4
 	jmp		0		; done here
-
+	
+	
+	
+test4	; show command summary
+	lda		COMMAND
+	cpi		'h'
+	jnz	test5
+	lxi h	HELPMSG
+	call	puts
+	lxi h	WORKINGADR
+	call	crlf
+	call	show_current
+	jmp		monloop
+	
+HELPMSG		DB	CR,LF,"Command Summary",CR,LF
+			DB	"q             Exit to OS",CR,LF
+			DB	"<enter> or n  Increment Address",CR,LF
+			DB	"b             Decrement Address",CR,LF
+			DB	"c [address]   Clear a Block of Memory",CR,LF
+			DB	"d [address]   Display a Block of Memory",CR,LF
+			DB	"g [address]   Goto and Start running at address",CR,LF
+			DB	"h             Show this Summary",CR,LF
+			DB  "m [address]   Move address pointer to new address",CR,LF
+			DB  ". [byte]      Enter new byte at current address, advance by one",CR,LF
+			DB  "All entered values are in hex",CR,LF
+			DB  NULL
+			
 
 ; '.' - get next 2 chars, convert to hex, save byte to current address, inc adr
-test4
+test5
+	lda		COMMAND
 	cpi		'.'		
-	jnz		test5
+	jnz		test6
 	call	gethexbyte		; get 2 ascii, convert to hex in A
 	lhld	WORKINGADR
 	mov		m,a				; save to current addr
@@ -87,65 +129,81 @@ test4
 	call	show_current
 	jmp		monloop
 	
-
-
-; 'm' - get next 4 chars, use as new working address
-test5
-	cpi	'm'
-	jnz		test6
-
-	call	gethexbyte		; get MSB
-	mov h,a	
-	call	gethexbyte		; get LSB
-	mov l,a
-	shld	WORKINGADR		; save new address
+	
+test6	; test for 'm' - change working memory address
+	lda		COMMAND
+	cpi		'm'
+	jnz		test7
+	call	get_address
+	lhld	TEMPADDR
+	shld	WORKINGADR
 	call	crlf
 	call	show_current
 	jmp		monloop
-
-
-
-; 'd' - get next 4 chars, use as starting address to display a 256 byte block of memory
-test6
-	cpi 'd'
-	jnz		test7
 	
-	call	gethexbyte
-	mov h,a
-	call	gethexbyte
-	mov l,a
+test7	; 'g' (goto) - set PC to address and execute from there
+	lda		COMMAND
+	cpi		'g'
+	jnz		test8	
+	call	get_address
+	call	crlf
+	lhld	TEMPADDR
+	pchl
+	
+test8	; 'd' (display) - display a 256 byte block of memory starting at HL
+	lda		COMMAND
+	cpi		'd'
+	jnz		test9
+	call	get_address
+	lhld	TEMPADDR
 	call	crlf
 	call	showblock
 	call	crlf
 	call	show_current
 	jmp		monloop
 	
-	
-; 'g' - get next 4 chars, use as address to start execution
-test7
-	cpi	'g'
-	jnz		test_end
-	
-	call	gethexbyte
-	mov h,a
-	call	gethexbyte
-	mov l,a
+test9	; 'c' (clear) - clear a 256 byte block of memory starting at HL
+	lda		COMMAND
+	cpi		'c'
+	jnz		test10
+	call	get_address
 	call	crlf
-	pchl
+	lhld	TEMPADDR
+	call	clearblock
+	call	crlf
+	call	show_current
+	jmp		monloop
+	
+test10	; future use
 	
 
-; unknown char - do nothing
-test_end
+test11	; future use
+
+test12	; future use
+
+test_end	; unknown char - do nothing
+	mvi a	'?'
+	call	putc
+	call	crlf
+	call	show_current
 	jmp		monloop
 	
 
 
+	
+	
 
 
 
-MONMSG1		DB	"8080 ML Monitor",CR,LF,NULL
 
-WORKINGADR DS 2
+
+
+MONMSG1		DB	"--- 8080 ML Monitor ---",CR,LF
+			DB  "Hit 'h' for command summary",CR,LF,NULL
+
+WORKINGADR  DS  2
+TEMPADDR	DS	2
+COMMAND		DS 	1
 
 ;; ------ Subroutines -------
 
@@ -188,9 +246,23 @@ crlf
 	ret	
 	
 	
+; ----- get_address ------
+; read next 4 bytest from the keyboard, convert to 16 bit, save for later
+get_address
+	mvi a	':'
+	call	putc
+	call	gethexbyte
+	mov h,a
+	call	gethexbyte
+	mov l,a
+	shld	TEMPADDR	; save for later
+	ret	
+	
+	
 ; ----------- show_current -------------	
 show_current	; crlf, show address, show byte
-	; show address as 4 byte hex value
+	; show address as 4 digit hex value and byte
+	; as 2 digit hex value. Do not change address
 	lhld	WORKINGADR
 	mov a,h
 	call	showhex
@@ -290,5 +362,18 @@ showblock1		; show 16 bytes
 	jnz		showblock+2
 	call	crlf
 	ret		; done
+	
+	
+; ------- clearblock - set a 256 byte block to NULL ----------
+clearblock
+	; starting address in HL
+	mvi c	ffh
+	xra a
+clearblock1
+	mov m,a
+	inx h
+	dcr c
+	jnz	clearblock1
+	ret
 	
 	

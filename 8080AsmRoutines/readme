@@ -1,3 +1,11 @@
+Place these following files on your SD card:
+boot.hex
+ed.com
+mon.com
+diag.com
+
+---------------------------------
+
 boot.asm is the 8080 based operating system.
 It relies on io ports as hooks to tie it into
 the c routines in emulator_1.c
