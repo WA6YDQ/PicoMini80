@@ -471,6 +471,7 @@ int load_file_to_ram(int usernumber, uint16_t start_address, char *filename) {
 
 /* write an address to the bus, then write a byte to the bus (GP8 thru GP15) */
 void write_byte_to_bus(uint8_t address, uint8_t data_byte) {
+	/* delays of 10 uS are unnecessaraly long - 1uS should work) */
 	
 	// 1. Create a mask for GP8 through GP15 (0xFF shifted left by 8)
     //    0xFF00 translates to binary bits 8 to 15 set to 1.
@@ -513,6 +514,7 @@ uint8_t read_byte_from_bus(int8_t address) {
 
 	uint32_t mask = 0xFF00;
     uint32_t value;		// data to write
+    /* delays of 10 uS are unnecessaraly long - 1uS should work) */
 
 	// Initialize the pins to output (prepare for sending address)
 	//#define GP8_15_MASK 0x0000FF00
@@ -555,27 +557,33 @@ uint8_t read_byte_from_bus(int8_t address) {
 void init_current_time(void) {
     struct tm user_time = {0};
     int input;
+	char buffer[80];
 
-    printf("\n--- Enter Current Local Date/Time ---\n");
-    printf("Enter Year (e.g. 2026): ");   
-    scanf("%d", &input); user_time.tm_year = input - 1900;
-    printf("%d\n",input);
+    printf("\n--- Enter Current Local Date/Time ---");
+    printf("\nEnter Year (e.g. 2026): ");   
+    memset(buffer,0,80);
+	pico_fgets(buffer,80,stdin); 
+    sscanf(buffer, "%d", &input); user_time.tm_year = input - 1900;
     
-    printf("Enter Month (1-12): ");      
-    scanf("%d", &input); user_time.tm_mon = input - 1;
-    printf("%d\n",input);
+    printf("\nEnter Month (1-12): ");  
+    memset(buffer,0,80);
+	pico_fgets(buffer,80,stdin);     
+    sscanf(buffer, "%d", &input); user_time.tm_mon = input - 1;
     
-    printf("Enter Day (1-31): ");        
-    scanf("%d", &user_time.tm_mday);
-    printf("%d\n",user_time.tm_mday);
+    printf("\nEnter Day (1-31): ");        
+    memset(buffer,0,80);
+	pico_fgets(buffer,80,stdin); 
+    sscanf(buffer, "%d", &user_time.tm_mday);
     
-    printf("Enter Hour (0-23): ");       
-    scanf("%d", &user_time.tm_hour);
-    printf("%d\n",user_time.tm_hour);
+    printf("\nEnter Hour (0-23): ");       
+    memset(buffer,0,80);
+	pico_fgets(buffer,80,stdin); 
+    sscanf(buffer, "%d", &user_time.tm_hour);
     
-    printf("Enter Minute (0-59): ");     
-    scanf("%d", &user_time.tm_min);
-    printf("%d\n",user_time.tm_min);
+    printf("\nEnter Minute (0-59): ");     
+    memset(buffer,0,80);
+	pico_fgets(buffer,80,stdin); 
+    sscanf(buffer, "%d", &user_time.tm_min);
 
     
     user_time.tm_sec = 0;
@@ -671,6 +679,7 @@ const char *FRESULT_str(FRESULT);
     }
     int col = 1;
     while (fr == FR_OK && fno.fname[0]) { /* Repeat while an item is found */
+        
         /* Create a string that includes the file name, the file size and the
          attributes string. */
         const char *pcWritableFile = "rw",	// "writable file",
@@ -685,7 +694,8 @@ const char *FRESULT_str(FRESULT);
         } else {
             pcAttrib = pcWritableFile;
         }
-        /* Create a string that includes the file name, the file size and the attributes string. */
+        
+        /* Create a string that includes the file name */
         if (read_memory(usernumber, DIRMODE)==0) {		// wide mode
         	sprintf(locbuf,"%-12s    ",fno.fname);
         	send_to_output(usernumber,locbuf);
@@ -697,12 +707,12 @@ const char *FRESULT_str(FRESULT);
         	}
 		}
         
+        /* Create a string with filename, , the file size and the attributes string. */
         if (read_memory(usernumber, DIRMODE)==1) {		// long mode
         	sprintf(locbuf,"%06llu %3s %-12s\n", fno.fsize, pcAttrib, fno.fname);
         	send_to_output(usernumber,locbuf);
 		}
 		
-
         fr = f_findnext(&dj, &fno); /* Search for next item */
     }
     f_closedir(&dj);

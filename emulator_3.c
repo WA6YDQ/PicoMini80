@@ -1,4 +1,4 @@
-/* emulator_2.c (C) 2026 Kurt Theis <theis.kurt@gmail.com>
+/* emulator_3.c (C) 2026 Kurt Theis <theis.kurt@gmail.com>
 
 	This turns a Pi Pico 2 into an 8 bit multi-user computer system.
 	Up to 8 simultanous users can share the system via serial IO.
@@ -20,7 +20,10 @@
 	file AddedInstructions.txt and include indexing, floating point
 	instructions, a break command for debugging your source code
 	and others. (BREAK issues a processor stop, and output is only
-	available on the user 0 USB console).
+	available on the user 0 USB console). Testing (very rough) shows
+	the 8080 instruction time as 1.2 uS giving an 8080 clock speed 
+	just under 1 MHz. When not running I/O instructions this is much
+	faster. 
 		
 	User 0 uses the USB serial port.
 	Users 1 and 2 use the on-board UART serial ports.
