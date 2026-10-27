@@ -1,6 +1,9 @@
-Uses a Pi Pico 2 to emulate an 8080 based computer.
+Not another cp/m emulator.
+
+Uses a Pi Pico 2 creating an actual multiuser mini computer.
 Supports 3 users without additional hardware, but has the
-power to support up to 8 users.
+power to support up to 8 users. This uses a superset of
+the intel i8080 instruction set.
 
 You will need to add an SD card adapter in hardware.
 You will need the Sd card drivers at:
