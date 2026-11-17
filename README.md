@@ -15,8 +15,9 @@ Software supports an 8 bit I/O bus with Pico hardware lines.
 NOTES: 
 
 emulator_3.c is the current program to build/use. 
+This is the actual "machine".
 
-ports.c are the I/O ports
+ports.c are the I/O ports.
 
 routines.c contain the non-machine routines.
 
